@@ -7,6 +7,9 @@
 ** unit circle with the points that did not		**
 **************************************************/
 
+// Variables defined via. compiler directives
+//  KERNEL_SOURCE_DIR
+
 #define __CL_ENABLE_EXCEPTIONS
 
 #include <iostream>
@@ -93,7 +96,7 @@ void pi_initial(cl::Context context, cl::Device device,
 		h_randNums[i] = float(rand()) / RAND_MAX;
 	}
 
-    string programSource = readFile("pi_initial.cl");
+    string programSource = readFile(KERNEL_SOURCE_DIR "pi_initial.cl");
     cl::Program::Sources sources;
     sources.push_back(std::make_pair(programSource.c_str(), programSource.size()));
     cl::Program program(context, sources);
@@ -168,7 +171,7 @@ void pi_gpu_reduction(cl::Context context, cl::Device device,
 		h_randNums[i] = float(rand()) / RAND_MAX;
 	}
 
-    string programSource = readFile("pi_gpu_reduction.cl");
+    string programSource = readFile(KERNEL_SOURCE_DIR "pi_gpu_reduction.cl");
     cl::Program::Sources sources;
     sources.push_back(std::make_pair(programSource.c_str(), programSource.size()));
     cl::Program program(context, sources);
@@ -245,7 +248,7 @@ void pi_coalesced_memory(cl::Context context, cl::Device device,
 		h_randNums[i] = float(rand()) / RAND_MAX;
 	}
 
-    string programSource = readFile("pi_coalesced_memory.cl");
+    string programSource = readFile(KERNEL_SOURCE_DIR "pi_coalesced_memory.cl");
     cl::Program::Sources sources;
     sources.push_back(std::make_pair(programSource.c_str(), programSource.size()));
     cl::Program program(context, sources);
