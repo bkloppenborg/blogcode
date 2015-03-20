@@ -20,11 +20,15 @@
 #include "cl_helpers.hpp"
 #include <chrono>
 
+#ifndef ulong
+typedef unsigned long ulong;
+#endif
+
 using namespace std;
 using namespace std::chrono;
 using namespace cl;
 
-const cl_device_type DEVICE_TYPE = CL_DEVICE_TYPE_GPU;
+const cl_device_type device_type_to_use = CL_DEVICE_TYPE_GPU;
 const int WORK_SIZE = 1000;
 const int samples = 2E7;
 
@@ -311,7 +315,7 @@ void pi_coalesced_memory(cl::Context context, cl::Device device,
 int main()
 {
     // get an OpenCL context and setup the device
-    cl::Context context(DEVICE_TYPE);
+	cl::Context context(device_type_to_use);
     vector<cl::Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
 	
     // create a command queue
