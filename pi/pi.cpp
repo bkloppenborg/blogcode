@@ -28,7 +28,7 @@ using namespace std;
 using namespace std::chrono;
 using namespace cl;
 
-const cl_device_type device_type_to_use = CL_DEVICE_TYPE_GPU;
+const cl_device_type device_type_to_use = CL_DEVICE_TYPE_ALL;
 const int WORK_SIZE = 1000;
 const int samples = 2E7;
 
@@ -100,7 +100,7 @@ void pi_initial(cl::Context context, cl::Device device,
 		h_randNums[i] = float(rand()) / RAND_MAX;
 	}
 
-    string programSource = readFile(KERNEL_SOURCE_DIR "pi_initial.cl");
+    string programSource = readFile(KERNEL_SOURCE_DIR "/pi_initial.cl");
     cl::Program::Sources sources;
     sources.push_back(std::make_pair(programSource.c_str(), programSource.size()));
     cl::Program program(context, sources);
@@ -175,7 +175,7 @@ void pi_gpu_reduction(cl::Context context, cl::Device device,
 		h_randNums[i] = float(rand()) / RAND_MAX;
 	}
 
-    string programSource = readFile(KERNEL_SOURCE_DIR "pi_gpu_reduction.cl");
+    string programSource = readFile(KERNEL_SOURCE_DIR "/pi_gpu_reduction.cl");
     cl::Program::Sources sources;
     sources.push_back(std::make_pair(programSource.c_str(), programSource.size()));
     cl::Program program(context, sources);
@@ -252,7 +252,7 @@ void pi_coalesced_memory(cl::Context context, cl::Device device,
 		h_randNums[i] = float(rand()) / RAND_MAX;
 	}
 
-    string programSource = readFile(KERNEL_SOURCE_DIR "pi_coalesced_memory.cl");
+    string programSource = readFile(KERNEL_SOURCE_DIR "/pi_coalesced_memory.cl");
     cl::Program::Sources sources;
     sources.push_back(std::make_pair(programSource.c_str(), programSource.size()));
     cl::Program program(context, sources);
@@ -312,26 +312,41 @@ void pi_coalesced_memory(cl::Context context, cl::Device device,
     print_result("OCL Coalesced", deviceName, estimatedValue, gpu_time, cpu_time, total_time);
 }
 
-int main()
+void run_benchmarks(cl::Device & device)
 {
-    // get an OpenCL context and setup the device
-	cl::Context context(device_type_to_use);
-    vector<cl::Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
-	
-    // create a command queue
+	// create a command queue
 	cl_command_queue_properties properties = CL_QUEUE_PROFILING_ENABLE;
 
-    print_result_header();
+	vector<cl::Device> devices;
+	devices.push_back(device);
+	cl::Context context(devices);
+	cl::CommandQueue queue(context, device, properties, NULL);
+	pi_initial(context, device, queue);
+	pi_gpu_reduction(context, device, queue);
+	pi_coalesced_memory(context, device, queue);
+
+	return;
+}
+
+int main()
+{
+	print_result_header();
+
+	// get a list of platforms
+	vector<cl::Platform> all_platforms;
+	cl::Platform::get(&all_platforms);
+
+	// print out results for all devices
+	for (auto platform : all_platforms)
+	{
+		vector<cl::Device> devices;
+		platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+
+		for (auto device : devices)
+		{
+			run_benchmarks(device);
+		}
+	}
 
 	pi_cpu();
-    
-    for(cl::Device device: devices)
-    {
-	    cl::CommandQueue queue(context, device, properties, NULL);
-	    pi_initial(context, device, queue);
-	    pi_gpu_reduction(context, device, queue);	
-	    pi_coalesced_memory(context, device, queue);
-    }
-
-	return 0;
 }
