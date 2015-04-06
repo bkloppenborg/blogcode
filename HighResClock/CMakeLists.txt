@@ -1,0 +1,4 @@
+PROJECT(HighResClock)
+
+FILE(GLOB SOURCE *.cpp)
+ADD_LIBRARY(HighResClock ${SOURCE})

@@ -18,15 +18,16 @@
 #include <iomanip>
 #include <CL/cl.hpp>
 #include "cl_helpers.hpp"
-#include <chrono>
+#include "HighResClock.hpp"
 
 #ifndef ulong
 typedef unsigned long ulong;
 #endif
 
 using namespace std;
-using namespace std::chrono;
 using namespace cl;
+using namespace chrono;
+using namespace timer;
 
 const cl_device_type device_type_to_use = CL_DEVICE_TYPE_ALL;
 const int WORK_SIZE = 1000;
@@ -39,8 +40,8 @@ void print_result_header()
 }
 
 void print_result(const string & method, const string & deviceName,
-    float pi_estimate, 
-    float kernel_time_usec, float cpu_time_usec, float total_time) 
+    float pi_estimate,
+    float kernel_time_usec, float cpu_time_usec, float total_time)
 {
     cout << left << "| " << setw(15) << method;
     cout << left << "| " << setw(15) << deviceName;
@@ -53,7 +54,7 @@ void print_result(const string & method, const string & deviceName,
 
 void pi_cpu(void)
 {
-	int count = 0; 
+	int count = 0;
 	float x, y;
     vector<float> randomNums(2*samples);
 
@@ -61,22 +62,22 @@ void pi_cpu(void)
     for(int i = 0; i < 2*samples; i++)	{
     	randomNums[i] = float(rand()) / RAND_MAX;
     }
-    
+
 	// start the timer
-	auto start = high_resolution_clock::now();
+	auto start = HighResClock::now();
 
 	// count how many samples reside in the circle
-    for(int i = 0; i < samples; i++) 
+    for(int i = 0; i < samples; i++)
 	{
-		x = randomNums[2*i]; 
+		x = randomNums[2*i];
 		y = randomNums[2*i + 1];
-    
+
 		if(x*x + y*y < 1.0)
 			count++;
 	}
 
 	// end the timer and calculate the execution time
-	auto stop = high_resolution_clock::now();
+	auto stop = HighResClock::now();
 	auto time = duration_cast<microseconds>(stop - start).count();
 
     // calculate the estimate and print the result
@@ -85,7 +86,7 @@ void pi_cpu(void)
 }
 
 
-void pi_initial(cl::Context context, cl::Device device, 
+void pi_initial(cl::Context context, cl::Device device,
     cl::CommandQueue queue)
 {
 	vector<float> h_randNums(2*samples);
@@ -94,7 +95,7 @@ void pi_initial(cl::Context context, cl::Device device,
     devices.push_back(device);
 
 	srand(time(NULL));
-	
+
 	for(int i = 0; i < 2*samples; i++)
 	{
 		h_randNums[i] = float(rand()) / RAND_MAX;
@@ -110,7 +111,7 @@ void pi_initial(cl::Context context, cl::Device device,
 	catch ( cl::Error & e) {
 		cout << e.what() << endl;
 		cout << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << endl;
-		
+
 	}
 
     //Wait for program to build
@@ -128,12 +129,12 @@ void pi_initial(cl::Context context, cl::Device device,
 
 	// timer
 	cl::Event launch;
-	auto start = high_resolution_clock::now();
+	auto start = HighResClock::now();
 
     // Setup and launch kernel
 	kernels[0].setArg(0, d_randNums);
 	kernels[0].setArg(1, d_results);
-	queue.enqueueNDRangeKernel(kernels[0], 0, NDRange(samples), 
+	queue.enqueueNDRangeKernel(kernels[0], 0, NDRange(samples),
         cl::NullRange, nullptr, &launch);
 
 	launch.wait();
@@ -142,14 +143,14 @@ void pi_initial(cl::Context context, cl::Device device,
 	float gpu_time = (g_stop - g_start) * 1E-3f;
 
     // Retrieve results (sum on the CPU)
-	queue.enqueueReadBuffer(d_results, CL_TRUE, 0, size, h_results.data());	
+	queue.enqueueReadBuffer(d_results, CL_TRUE, 0, size, h_results.data());
 
-    auto sum_start = high_resolution_clock::now();
+    auto sum_start = HighResClock::now();
 	int sum = 0;
 	for(auto sample: h_results)
 		sum += sample;
 
-	auto stop = high_resolution_clock::now();
+	auto stop = HighResClock::now();
 	auto cpu_time = duration_cast<microseconds>(stop - sum_start).count();
 	auto total_time = duration_cast<microseconds>(stop - start).count();
 
@@ -160,7 +161,7 @@ void pi_initial(cl::Context context, cl::Device device,
 
 }
 
-void pi_gpu_reduction(cl::Context context, cl::Device device, 
+void pi_gpu_reduction(cl::Context context, cl::Device device,
     cl::CommandQueue queue)
 {
 	vector<float> h_randNums(2*samples);
@@ -169,7 +170,7 @@ void pi_gpu_reduction(cl::Context context, cl::Device device,
     devices.push_back(device);
 
 	srand(time(NULL));
-	
+
 	for(int i = 0; i < 2*samples; i++)
 	{
 		h_randNums[i] = float(rand()) / RAND_MAX;
@@ -185,7 +186,7 @@ void pi_gpu_reduction(cl::Context context, cl::Device device,
 	catch ( cl::Error & e) {
 		cout << e.what() << endl;
 		cout << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << endl;
-		
+
 	}
 
     //Wait for program to build
@@ -197,18 +198,18 @@ void pi_gpu_reduction(cl::Context context, cl::Device device,
     program.createKernels(&kernels);
 
 	// Setup buffers
-	Buffer d_randNums(context, CL_MEM_COPY_HOST_PTR, 
+	Buffer d_randNums(context, CL_MEM_COPY_HOST_PTR,
 		h_randNums.size() * sizeof(float), h_randNums.data());
 	Buffer d_results(context, CL_MEM_WRITE_ONLY, h_results.size() * sizeof(float));
 
 	// timer
 	cl::Event launch;
-	auto start = high_resolution_clock::now();
+	auto start = HighResClock::now();
 
     // Setup and launch kernel
 	kernels[0].setArg(0, d_randNums);
 	kernels[0].setArg(1, d_results);
-	queue.enqueueNDRangeKernel(kernels[0], 0, NDRange(h_results.size()), 
+	queue.enqueueNDRangeKernel(kernels[0], 0, NDRange(h_results.size()),
         cl::NullRange, nullptr, &launch);
 
 	launch.wait();
@@ -217,16 +218,16 @@ void pi_gpu_reduction(cl::Context context, cl::Device device,
 	float gpu_time = (g_stop - g_start) * 1E-3f;
 
     // Retrieve results (sum on the CPU)
-	queue.enqueueReadBuffer(d_results, CL_TRUE, 0, 
-		h_results.size() * sizeof(float), h_results.data());	
+	queue.enqueueReadBuffer(d_results, CL_TRUE, 0,
+		h_results.size() * sizeof(float), h_results.data());
 
 
-	auto sum_start = high_resolution_clock::now();
+	auto sum_start = HighResClock::now();
 	int sum = 0;
 	for(auto sample: h_results)
 		sum += sample;
 
-	auto stop = high_resolution_clock::now();
+	auto stop = HighResClock::now();
 	auto cpu_time = duration_cast<microseconds>(stop - sum_start).count();
 	auto total_time = duration_cast<microseconds>(stop - start).count();
 
@@ -237,7 +238,7 @@ void pi_gpu_reduction(cl::Context context, cl::Device device,
 }
 
 
-void pi_coalesced_memory(cl::Context context, cl::Device device, 
+void pi_coalesced_memory(cl::Context context, cl::Device device,
     cl::CommandQueue queue)
 {
 	vector<float> h_randNums(2*samples);
@@ -246,7 +247,7 @@ void pi_coalesced_memory(cl::Context context, cl::Device device,
     devices.push_back(device);
 
 	srand(time(NULL));
-	
+
 	for(int i = 0; i < 2*samples; i++)
 	{
 		h_randNums[i] = float(rand()) / RAND_MAX;
@@ -262,7 +263,7 @@ void pi_coalesced_memory(cl::Context context, cl::Device device,
 	catch ( cl::Error & e) {
 		cout << e.what() << endl;
 		cout << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << endl;
-		
+
 	}
 
     //Wait for program to build
@@ -274,18 +275,18 @@ void pi_coalesced_memory(cl::Context context, cl::Device device,
     program.createKernels(&kernels);
 
 	// Setup buffers
-	Buffer d_randNums(context, CL_MEM_COPY_HOST_PTR, 
+	Buffer d_randNums(context, CL_MEM_COPY_HOST_PTR,
 		h_randNums.size() * sizeof(float), h_randNums.data());
 	Buffer d_results(context, CL_MEM_WRITE_ONLY, h_results.size() * sizeof(float));
 
 	// timer
 	cl::Event launch;
-	auto start = high_resolution_clock::now();
+	auto start = HighResClock::now();
 
     // Setup and launch kernel
 	kernels[0].setArg(0, d_randNums);
 	kernels[0].setArg(1, d_results);
-	queue.enqueueNDRangeKernel(kernels[0], 0, NDRange(h_results.size()), 
+	queue.enqueueNDRangeKernel(kernels[0], 0, NDRange(h_results.size()),
         cl::NullRange, nullptr, &launch);
 
 	launch.wait();
@@ -294,15 +295,15 @@ void pi_coalesced_memory(cl::Context context, cl::Device device,
 	float gpu_time = (g_stop - g_start) * 1E-3f;
 
     // Retrieve results (sum on the CPU)
-	queue.enqueueReadBuffer(d_results, CL_TRUE, 0, 
-		h_results.size() * sizeof(float), h_results.data());	
+	queue.enqueueReadBuffer(d_results, CL_TRUE, 0,
+		h_results.size() * sizeof(float), h_results.data());
 
-	auto sum_start = high_resolution_clock::now();
+	auto sum_start = HighResClock::now();
 	int sum = 0;
 	for(auto sample: h_results)
 		sum += sample;
 
-	auto stop = high_resolution_clock::now();
+	auto stop = HighResClock::now();
 	auto cpu_time = duration_cast<microseconds>(stop - sum_start).count();
 	auto total_time = duration_cast<microseconds>(stop - start).count();
 
