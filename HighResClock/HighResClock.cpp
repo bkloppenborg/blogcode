@@ -14,7 +14,7 @@ namespace
 	}();
 }
 
-timer::HighResClock::time_point gaston::HighResClock::now()
+timer::HighResClock::time_point timer::HighResClock::now()
 {
 	LARGE_INTEGER count;
 	QueryPerformanceCounter(&count);
