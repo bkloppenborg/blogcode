@@ -398,6 +398,90 @@ void pi_zero_copy(cl::Context context, cl::Device device,
 }
 
 
+/// Compute Pi on the GPU via. Monte Carlo methods. This method improves on
+/// `pi_zero_copy` by storing the sample points in float4.
+void pi_float4(cl::Context context, cl::Device device,
+    cl::CommandQueue queue)
+{
+	vector<float> h_x(samples);
+    vector<float> h_y(samples);
+    int result_size = samples / (4*WORK_SIZE);
+    vector<cl::Device> devices;
+    devices.push_back(device);
+
+	srand(time(NULL));
+
+	for(int i = 0; i < samples; i++)
+	{
+		h_x[i] = float(rand()) / RAND_MAX;
+		h_y[i] = float(rand()) / RAND_MAX;
+	}
+
+    string programSource = readFile(KERNEL_SOURCE_DIR "/pi_float4.cl");
+    cl::Program::Sources sources;
+    sources.push_back(std::make_pair(programSource.c_str(), programSource.size()));
+    cl::Program program(context, sources);
+	try {
+	   program.build(devices);
+	}
+	catch ( cl::Error & e) {
+		cout << e.what() << endl;
+		cout << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << endl;
+
+	}
+
+    //Wait for program to build
+    while(program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>(device) != CL_BUILD_SUCCESS) {
+        //sleep(1);
+    }
+
+    vector<Kernel> kernels;
+    program.createKernels(&kernels);
+
+	// Setup zero-copy buffers
+	Buffer d_x(context, CL_MEM_ALLOC_HOST_PTR | CL_MEM_COPY_HOST_PTR,
+		h_x.size() * sizeof(float), h_x.data());
+	Buffer d_y(context, CL_MEM_ALLOC_HOST_PTR | CL_MEM_COPY_HOST_PTR,
+		h_y.size() * sizeof(float), h_y.data());
+	Buffer d_results(context, CL_MEM_ALLOC_HOST_PTR | CL_MEM_WRITE_ONLY, result_size * sizeof(float));
+
+	// timer
+	cl::Event launch;
+	auto start = HighResClock::now();
+
+    // Setup and launch kernel
+	kernels[0].setArg(0, d_x);
+	kernels[0].setArg(1, d_y);
+	kernels[0].setArg(2, d_results);
+	queue.enqueueNDRangeKernel(kernels[0], 0, NDRange(result_size),
+        cl::NullRange, nullptr, &launch);
+
+	launch.wait();
+	ulong g_start = launch.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+	ulong g_stop  = launch.getProfilingInfo<CL_PROFILING_COMMAND_END>();
+	float gpu_time = (g_stop - g_start) * 1E-3f;
+
+    // Retrieve results (sum on the CPU)
+    float * h_results = (float*) queue.enqueueMapBuffer(d_results, CL_TRUE, CL_MAP_READ, 0, result_size * sizeof(float));
+
+	auto sum_start = HighResClock::now();
+	int sum = 0;
+	for(int i = 0; i < result_size; i++)
+		sum += h_results[i];
+
+    // release the buffer back to OpenCL’s control
+    queue.enqueueUnmapMemObject(d_results, h_results);
+
+	auto stop = HighResClock::now();
+	auto cpu_time = duration_cast<microseconds>(stop - sum_start).count();
+	auto total_time = duration_cast<microseconds>(stop - start).count();
+
+	float estimatedValue = 4.0 * sum / samples;
+
+    string deviceName = device.getInfo<CL_DEVICE_NAME>();
+    print_result("Float4", deviceName, estimatedValue, gpu_time, cpu_time, total_time);
+}
+
 void run_benchmarks(cl::Device & device)
 {
 	// create a command queue
@@ -411,6 +495,7 @@ void run_benchmarks(cl::Device & device)
 	pi_gpu_reduction(context, device, queue);
 	pi_coalesced_memory(context, device, queue);
 	pi_zero_copy(context, device, queue);
+    pi_float4(context, device, queue);
 
 	return;
 }
